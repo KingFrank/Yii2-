@@ -46,7 +46,7 @@ class Object implements Configurable
     {
         $getter = 'get' . $name;
         if (method_exists($this, $getter)) {
-            return $this->getter;
+            return $this->$getter;
         } elseif (method_exists($this, 'set' . $name)) {
             throw new InvalidCallException('Getting write-only property' . get_class($this) . '::' . $name);
         } else {
@@ -92,7 +92,7 @@ class Object implements Configurable
     {
         $setter = 'set' . $name;
         if (method_exists($this, $setter)) {
-            $this->setter(null);
+            $this->$setter(null);
         } elseif (method_exists($this, 'get' . $name)) {
             throw new InvalidCallException('Unsetting read-only property' . get_class($this) . '::' . $name);
         }
