@@ -297,6 +297,9 @@ class Container extends Component
 
     /**
      * 解析依赖参数的回调函数
+     * 如果是构造函数中依赖了其他的组件，需要先解析
+     * resolveCallableDependencies 中调用了$this->get来获取依赖的实例
+     * 个人感觉 else 语句里会返回一个false
      */
     public function invoke(callable $callback, $params = [])
     {
@@ -307,6 +310,12 @@ class Container extends Component
         }
     }
 
+    /**
+     * 解析构造函数的依赖参数
+     * 判断是否是依赖其余的组件
+     * 解析依赖的组件后返回
+     *
+     */
     public function resolveCallableDependencies(callable $callback, $params = [])
     {
         if (is_array($callback)) {
