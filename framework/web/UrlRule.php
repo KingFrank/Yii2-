@@ -185,6 +185,7 @@ class UrlRule extends Object implements UrlRuleInterface
                 // $pattern 是参数对应的值
                 $pattern = isset($match[2][0]) ? $match[2][0] : '[&\/]+';
                 $placeholder = 'a' . hash('crc32b', $name);
+                $this->placeholders[$placehodler] = $name;
                 if (array_key_exists($name, $this->defaults)) {
                     // <controller:\w> 对应的长度和偏移量
                     $length = strlen($match[0][0]);
@@ -211,6 +212,7 @@ class UrlRule extends Object implements UrlRuleInterface
         // preg_replace 将<controller:post> 替换成<controller>
         $this->_template = preg_replace('/<([\w._-]+):?([^>]+)?>/', '<$1>', $this->pattern);
         // 将$this->route 中的按照$tr中的键值替换一下，组成$this->pattern
+        // 会变成$this->pattern = '#(?P<$name>$pattern)/(?P<$name>$pattern)'格式
         $this->pattern = '#' . trim(strtr($this->route, $tr), '/') . '$#u';
 
         if (!empty($this->_routeParams)) {
@@ -267,6 +269,7 @@ class UrlRule extends Object implements UrlRuleInterface
         $tr = [];
         foreach ($matches as $name => $value) {
             if (isset($this->_routeParams[$name])) {
+                // $tr['<action>'] = 'post'
                 $tr[$this->_routeParams[$name]] = $value;
                 unset($params[$name]);
             } elseif (isset($this->_paramsRules[$name])) {
@@ -298,9 +301,12 @@ class UrlRule extends Object implements UrlRuleInterface
             if ($this->_routeRule !== null && preg_match($this->_routeRule, $route, $matches)) {
                 $matches = $this->substitutePlaceholderNames($matches);
                 foreach ($this->_routeParams as $name => $token) {
-                    if (isset($this->defaults[$name]) && strcmp($this->defaults[$name], $matches[$name])) {
+                    // 将路由的参数保存到$tr中
+                    // 存在默认路由和传递过来的路由相同的情况下可以省略
+                    if (isset($this->defaults[$name]) && strcmp($this->defaults[$name], $matches[$name] === 0)) {
                         $tr[$token] = '';
                     } else {
+                        // $tr['<action>'] = $matches[$name],就是路由中对应的(?P<$name>$pattern) $name 对应的值 
                         $tr[$token] = $matches[$name];
                     }
                 }
@@ -309,6 +315,8 @@ class UrlRule extends Object implements UrlRuleInterface
             }
         }
 
+        // 遍历所有的默认参数，传递过来的$params必须要包含的所有的默认参数
+        // 提供的值和$defaults里保存的一样的情况下可以省略
         foreach ($this->defaults as $name => $value) {
             if (isset($this->_routeParams[$name])) {
                 continue;
@@ -325,8 +333,9 @@ class UrlRule extends Object implements UrlRuleInterface
             }
         }
 
-        foreach ($this->_paramRules as $name => $value) {
-            if (isset($params[$name]) && !is_array($par4ams[$name]) && ($rule === '' || preg_match($rule, $params[$name]))) {
+        foreach ($this->_paramRules as $name => $rule) {
+            // 传递过来的参数，没有规则，活着是符合规则，编码以后放入到$tr中
+            if (isset($params[$name]) && !is_array($params[$name]) && ($rule === '' || preg_match($rule, $params[$name]))) {
                 $tr["<$name>"]  = $this->encodeParams ? urlencode($params[$name]) : $params[$name];
                 unset($params[$name]);
             } elseif (!isset($this->defaults[$name]) || isset($params[$name])) {
@@ -334,11 +343,13 @@ class UrlRule extends Object implements UrlRuleInterface
             }
         }
 
+        // 初步的更具$this->_template生成URL $this->_template =  '/post/<action>/<id>'
         $url = trim(strtr($this->_template, $tr), '/');
         if ($this->host !== null) {
             $pos = strpos($url, '/', 8);
             if ($pos !== false) {
-                $url = substr($url, 0, $pos) . preg_replace('#/+#', '/', sbustr($url, $pos));
+                // 去掉路由中的+
+                $url = substr($url, 0, $pos) . preg_replace('#/+#', '/', substr($url, $pos));
             }
         } elseif (strpos($url, '//') !== false) {
             $url = preg_replace('#/+#', '/', $url);
@@ -352,6 +363,7 @@ class UrlRule extends Object implements UrlRuleInterface
             $url .= '?' . $query;
         }
 
+        // 根源其实还是有$this->_template转换来的
         return $url;
     }
     
