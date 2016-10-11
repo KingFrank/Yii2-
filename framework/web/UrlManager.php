@@ -8,16 +8,22 @@ use yii\Caching\Cache;
 
 class UrlManager extends Component
 {
+    // 使用美化的模式
     public $enablePrettyUrl = false;
 
+    // 使用严格的模式，必须匹配其中一个rule
     public $enableStrictParsing = false;
 
+    // 匹配规则
     public $rules = [];
 
+    // 路由的后缀
     public $suffix;
 
+    // 是否隐藏入口文件
     public $showScriptName = true;
 
+    // 默认使用的路由的参数
     public $routeParam = 'r';
 
     public $cache = 'cache';
@@ -60,6 +66,9 @@ class UrlManager extends Component
         }
     }
 
+    /**
+     * 添加匹配的规则
+     */
     public function addRules($rules, $append = true)
     {
         if(!$this->enablePrettyUrl) {
@@ -104,6 +113,9 @@ class UrlManager extends Component
         return $compiledRules;
     }
 
+    /**
+     * 解析请求
+     */
     public function parseRequest($request)
     {
         if ($this->enablePrettyUrl) {
@@ -149,6 +161,9 @@ class UrlManager extends Component
         }
     }
 
+    /**
+     * 创建路径
+     */
     public function createUrl($params)
     {
         $params = (array) $params;
@@ -228,11 +243,17 @@ class UrlManager extends Component
         return false;
     }
 
+    /**
+     * 把匹配规则缓存起来
+     */
     protected function setRuleToCache($cacheKey, UrlRuleInterface $rule)
     {
         $this->_ruleCache[$cacheKey][] = $rule;
     }
 
+    /**
+     * 创建绝对路由
+     */
     public function createAbsoluteUrl($params, $scheme = null)
     {
         $params = (array) $params;
@@ -248,6 +269,10 @@ class UrlManager extends Component
         return $url;
     }
 
+    /**
+     * 根据Request 获取相对的根路径的url
+     *
+     */
     public function getBaseUrl()
     {
         if ($this->_baseUrl === null) {
@@ -267,6 +292,9 @@ class UrlManager extends Component
         $this->_baseUrl = $value === null ? null : rtrim($value, '/');
     }
 
+    /**
+     * 根据Request 获取入口文件的路由
+     */
     public function getScriptUrl()
     {
         if ($this->_scriptUrl === null) {
@@ -279,11 +307,18 @@ class UrlManager extends Component
         }
     }
 
+    /**
+     * 设置入口文件的路由
+     */
     public function setScriptUrl($value)
     {
         $this->_scriptUrl = $value;
     }
 
+    /**
+     * 获取域名信息
+     * 还是调用的Request,$_SERVER['HTTP_HOST']
+     */
     public function getHostInfo()
     {
         if ($this->_hostUrl === null) {
@@ -298,6 +333,9 @@ class UrlManager extends Component
         return $this->_hostInfo;
     }
 
+    /**
+     * 设置域名信息
+     */
     public function setHostInfo($value)
     {
         $this->_hostInfo = $value === null ? null : rtrim($value, '/');
