@@ -67,6 +67,7 @@ class Request extends \yii\base\Request
     private $_headers;
 
     /**
+     * 将以此请求解析成路由和关联的参数数组
      * 调用UrlManager->parseRequest()解析这次请求
      * 把路由和参数返回
      * 保存路由参数
@@ -79,6 +80,7 @@ class Request extends \yii\base\Request
         if ($result !== false) {
             list ($route, $params) = $result;
             if ($this->_queryParams === null) {
+                // 将解析的返回值添加到$_GET中，如美化过的路由中/post/view/100,100代表的是'id' => 100
                 $_GET = $params + $_GET;
             } else {
                 $this->_queryParams = $params + $this->_queryParams;
@@ -90,6 +92,8 @@ class Request extends \yii\base\Request
     }
 
     /**
+     * 前两种方法是为了支持，只有get和post请求的
+     * 将 HTTP_HEADER_NAME 转换成 Header-Name
      * 保存http头信息
      */
     public function getHeaders()
@@ -103,6 +107,7 @@ class Request extends \yii\base\Request
             } else {
                 foreach ($_SERVER as $name => $value) {
                     if (strncmp($name, 'HTTP_', 5) === 0) {
+                        // 将 HTTP_HEADER_NAME 转换成 Header-Name
                         $name = str_replace(' ', '-', ucwords(strtolower(str_replace('-', ' ', substr($name, 5)))));
                         $this->_headers->add($name, $value);
                     }
@@ -118,6 +123,7 @@ class Request extends \yii\base\Request
 
     /**
      * 获取请求使用的方法
+     * 前两种就是用post模拟PATCH之类的请求
      */
     public function getMethod()
     {
@@ -189,6 +195,7 @@ class Request extends \yii\base\Request
         return isset($_SERVER['HTTP_USER_AGENT']) && (stripos($_SERVER['HTTP_USER_AGENT'], 'Shockwave') !== false || stripos($_SERVER['HTTP_USER_AGENT'], 'Flash') !== false);
     }
 
+    // 原生的，没有经过处理的请求体
     private $_rawBody;
 
     public function getRawBody()
@@ -204,6 +211,7 @@ class Request extends \yii\base\Request
         $this->_rawBody;
     }
 
+    // 请求体重的参数
     private $_bodyParams;
 
     /**
@@ -229,6 +237,7 @@ class Request extends \yii\base\Request
                 if (!($parser instanceof RequestParaeserInterface)) {
                     throw new InvalidConfigExcetption("The 'ContentType' request parser is invalid. It must implement the yii\\web\\RequestParserInterface");
                 }
+                // 不同的content-type，使用不同的解析器来解析
                 $this->_bodyParams = $parser->parse($this->getRawBody(), $contentType);
             } elseif (isset($this->parsers['*'])) {
                 $parser = Yii::createObject($this->parsers['*']);
@@ -267,6 +276,7 @@ class Request extends \yii\base\Request
         }
     }
 
+    // 通过queryString返回的值
     private $_queryParams;
 
     public function getQueryParams()
@@ -298,6 +308,7 @@ class Request extends \yii\base\Request
         return isset($params[$name]) ? $params[$name] : $defaultValue;
     }
 
+    // 请求的域名
     private $_hostInfo;
 
     public function getHostInfo()
@@ -393,8 +404,21 @@ class Request extends \yii\base\Request
         $this->_scriptFile = $value;
     }
 
-    private $_pothInfo;
+    // 入口脚本之后，参数之前的部分
+    // 就是路由信息了
+    private $_pathInfo;
 
+    /**
+     * 获取请求的路径
+     *
+     *  调用的流程是：
+     *  reslovePathInfo
+     *  getUrl
+     *  resloveRequestUri
+     * 得到的是域名后的素有URL
+     * http://www.yiiframework.com/admin.php/user/info?uid=88
+     * 得到的是admin.php/user/info?uid=88
+     */
     public function getPathInfo()
     {
         if ($this->_pathInfo === null) {
@@ -408,16 +432,51 @@ class Request extends \yii\base\Request
         $this->_pathInfo = $value === null ? null : ltrim($value, '/');
     }
 
-    // *---------------weiwan
+    /**
+     * getUrl  得到的是域名后的素有URL
+     * http://www.yiiframework.com/admin.php/user/info?uid=88
+     * 得到的是admin.php/user/info?uid=88
+     */
     public function reslovePathInfo()
     {
         $pathInfo = $this->getUrl();
-
         if ($pos = strpos($pathInfo, '?') !== false) {
              $pathInfo = substr($pathInfo, 0, $pos);
         }
-
-        $pathInfo = urldecode($pathInfo);
+        // 将后面的参数切掉，剩下的就是域名后到？前的部分
+        $pathInfo = urlencode($pathInfo);
+        if (!preg_match('%^(?:
+            [\x09\x0A\X0D\x20-\x7E]
+            | [\xC2-\xDF][\x80-\xBF]
+            | \xE0[\xA0-\xBF][\x80-\xBF]
+            | [\xE1-\xEC\xEE\xEF][\x80-\xBF]{2}
+            | \xED[\x80-\x9F][\x80-\xBF]
+            | \xF0[\x90-\xBF][\x80-\xBF]{2}
+            | [\xF1-\xF3][\x80-xBF]{3}
+            | \xF4[\x80-\x8F][\x80-\xBF]{2}
+        )*$%xs', $pathInfo)) {
+            $pathInfo = utf8_encode($pathInfo);
+        }
+        // $scriptUrl 入口文件的相对路径
+        $scriptUrl = $this->getScriptUrl();
+        // $baseUrl 是dirname($scriptUrl);
+        $baseUrl = $this->getBaseUrl();
+        // 去除入口文件
+        if (strpos($pathInfo, $scriptUrl) === 0) {
+            $pathInfo = substr($pathInfo, strlen($scriptUrl));
+        } elseif ($baseUrl === '' || strpos($pathInfo, $baseUrl) === 0) {
+            $pathInfo = substr($pathInfo, strlen($baseUrl));
+        } elseif (isset($_SERVER['PHP_SELF']) && strpos($_SERVER['PHP_SELF'], $scriptUrl) === 0) {
+            $pathInfo = substr($_SERVER['PHP_SELF'], strlen($scriptUrl));
+        } else {
+            throw new InvalidConfigException('Unable to determine the path info of hte current request');
+        }
+        if (substr($pathInfo, 0, 1) === '/') {
+            $pathInfo = substr($pathInfo, 1);
+        }
+        
+        // 返回的是入口文件后的部分和？前的部分
+        return (string) $pathInfo;
     }
 
     public function getAbsoluteUrl()
@@ -425,6 +484,7 @@ class Request extends \yii\base\Request
         return $this->getHostInfo() . $this->getUrl();
     }
 
+    // 请求的完整的URL
     private $_url;
 
     public function getUrl()
@@ -693,6 +753,10 @@ class Request extends \yii\base\Request
         return $this->_cookies;
     }
 
+    /**
+     *
+     * 根据是否验证cookie数据准确性来向cookie存值
+     */
     public function loadCookies()
     {
         $cookies = [];
@@ -704,12 +768,13 @@ class Request extends \yii\base\Request
                 if (!is_string($value)) {
                     continue;
                 }
+                // cookie 里的值和cookieValidation对比
                 $data = Yii::$app->getSecruity()->validateData($value, $this->cookieValidationKey);
                 if ($data === false) {
                     continue;
                 }
                 $data = @unserialize($data);
-                if (is_array($ata) && isset($data[0], $data[1]) && $data[0] === $name) {
+                if (is_array($data) && isset($data[0], $data[1]) && $data[0] === $name) {
                     $cookies[$name] = new Cookie([
                         'name' => $name,
                         'value' => $data[1],
@@ -731,6 +796,10 @@ class Request extends \yii\base\Request
 
     private $_csrfToken;
 
+    /**
+     * regenerate 是否再次生成
+     * 保存一个随机的字符串到$_csrfToken
+     */
     public function getCsrfToken($regenerate = false)
     {
         if ($this->_csrfToken === null || $regenerate) {
@@ -739,6 +808,7 @@ class Request extends \yii\base\Request
             }
 
             $chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-.';
+            // 将字符重复5遍，随机打乱，取出来其中的8位
             $mask = substr(str_shuffle(str_repeat($chars, 5)), 0, static::CSRF_MASK_LENGTH);
 
             $this->_csrfToken = str_replace('+', '/', base64_encode($mask . $this->xorTokens($token, $mask)));
@@ -746,6 +816,9 @@ class Request extends \yii\base\Request
         return $this->_csrfToken;
     }
 
+    /**
+     * 从会话中去除$this->csrfParam
+     */
     protected function loadCsrfToken()
     {
         if ($this->enableCsrfCookie) {
@@ -755,6 +828,7 @@ class Request extends \yii\base\Request
         }
     }
 
+    // 生成csrfToken
     protected function generateCsrfToken()
     {
         $token = Yii::$app->getSecurity()->generateRandomString();
@@ -767,6 +841,7 @@ class Request extends \yii\base\Request
         return $token;
     }
 
+    // 异或处理两个字符串，短的用长的填充
     private function xorTokens($token1, $token2)
     {
         $n1 = StringHelper::byteLength($token1);
@@ -780,12 +855,16 @@ class Request extends \yii\base\Request
         return $token1 ^ $token2;
     }
 
+    // 通过请求头获取csrfToken
     public function getCsrfTokenFromHeader()
     {
         $key = 'HTTP_' . str_replace('-', '_', strtoupper(static::CSRF_HEADER));
         return isset($_SERVER[$key]) ? $_SERVER[$key] : null;
     }
 
+    /**
+     * 将token保存到cookie中
+     */
     protected function createCsrfCookie($token)
     {
         $options = $this->csrfCookie;
@@ -794,6 +873,10 @@ class Request extends \yii\base\Request
         return new Cookie($options);
     }
 
+    /**
+     *
+     * 根据传递过来的值和会话保存的值对比
+     */ 
     public function validateCsrfToke($token = null)
     {
         $method = $this->getMethod();
