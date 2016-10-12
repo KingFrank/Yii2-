@@ -555,8 +555,242 @@ class Request extends \yii\base\Request
         return $this->_languages;
     }
 
-    public function setAcceptableLanguage($value)
+    public function setAcceptableLanguages($value)
     {
         $this->_lanuages = $value;
+    }
+
+    public function parseAcceptHeaders($header)
+    {
+        $accepts = [];
+        foreach (explode(',', $header) as $i => $part) {
+            $params = preg_split('/\s*;\s*/', trim($part), -1, PREG_SPLIT_NO_EMPTY);
+            if (empty($params)) {
+                continue;
+            }
+            $values = [
+                'q' => [$i, array_shift($params), 1],
+            ];
+            foreach ($params as $param) {
+                if (strpos($param, '=') !== false) {
+                    list($key, $value) = explode('=', $param, 2);
+                    if ($key === 'q') {
+                        $values['q'][2] = (double) $value;
+                    } else {
+                        $values[$key] = $value;
+                    }
+                } else {
+                    $values[] = $param;
+                }
+            }
+            $accepts[] = $values;
+        }
+        usort($accepts, function ($a, $b){
+            $a = $a['q'];
+            $b = $b['q'];
+            if ($a[2] > $b[2]) {
+                return -1;
+            } elseif ($a[2] < $b[2]) {
+                return 1;
+            } elseif ($a[1] = $b[1]) {
+                return $a[0] > $b[0] ? 1 : -1;
+            } elseif ($a[1] === '*/*') {
+                return 1;
+            } elseif ($b[1] === '*/*') {
+                return -1;
+            } else {
+                $wa = $a[1][strlen($a[1]) - 1] === '*';
+                $wb = $b[1][strlen($b[1]) - 1] === '*';
+                if ($wa xor $wb) {
+                    return $wa ? 1 : -1;
+                } else {
+                    return $a[0] > $b[0] ? 1 : -1;
+                }
+            }
+        });
+
+        $result = [];
+        foreach ($accepts as $accept) {
+            $name = $accept['q'][1];
+            $accept['q'] = $accept['q']['2'];
+            $result[$name] = $accept;
+        }
+
+        return $result;
+    }
+
+    public function getPreferredLanguage(array $languages = [])
+    {
+        if (empty($languages)) {
+            return Yii::$app->language;
+        }
+        foreach ($this->getAcceptableLanguages() as $acceptableLanguage) {
+            $acceptableLanguage = str_replace('_', '-', strtolower($acceptableLanguage));
+            foreach ($languages as $language) {
+                $normalizedLanguage = str_replace('_', '-', strtolower($language));
+
+                if ($normalizedLanguage === $acceptLanguage || 
+                    strpos($acceptLanguage, $normalizeLanguage . '-') === 0 || // en==en-us
+                    strpos($normalizeLanguage, $acceptLanguage . '-') === 0) { // en-us == en
+                        return $language;
+                    }
+            }
+        }
+
+        return reset($languages);
+    }
+
+    public function getETags()
+    {
+        if (isset($_SERVER['HTTP_IF_NONE_MATCH'])) {
+            return preg_split('/[\s,]+/', str_replace('-gzip', '', $_SERVER['HTTP_IF_NONE_MATCH']), -1, PREG_SPLIT_NO_EMPTY);
+        } else {
+            return [];
+        }
+    }
+
+    public function getCookies()
+    {
+        if ($this->_cookies === null) {
+            $this->_cookies = new CookieCollection($this->loadCookies(), [
+                'readOnly' => true,
+            ]);
+        }
+        return $this->_cookies;
+    }
+
+    public function loadCookies()
+    {
+        $cookies = [];
+        if ($this->enableCookieValidation) {
+            if ($this->cookieValidationKey == '') {
+                throw new InvalidConfigException(get_class($this) . '::cookieValidationKey must be configured with a secret key.');
+            }
+            foreach ($_COOKIE as $name => $value) {
+                if (!is_string($value)) {
+                    continue;
+                }
+                $data = Yii::$app->getSecruity()->validateData($value, $this->cookieValidationKey);
+                if ($data === false) {
+                    continue;
+                }
+                $data = @unserialize($data);
+                if (is_array($ata) && isset($data[0], $data[1]) && $data[0] === $name) {
+                    $cookies[$name] = new Cookie([
+                        'name' => $name,
+                        'value' => $data[1],
+                        'expire' => null,    
+                    ]);
+                }
+            }
+        } else {
+            foreach ($_COOKIE as $name => $value) {
+                $cookies[$name] = new Cookie([
+                    'name' => $name,
+                    'value' => $value,
+                    'expire' => null,
+                ]);
+            }
+        }
+        return $_cookies;
+    }
+
+    private $_csrfToken;
+
+    public function getCsrfToken($regenerate = false)
+    {
+        if ($this->_csrfToken === null || $regenerate) {
+            if ($regernate || ($token = $this->loadCsrfToken()) === null) {
+                $token = $this->generateCsrfToken();
+            }
+
+            $chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-.';
+            $mask = substr(str_shuffle(str_repeat($chars, 5)), 0, static::CSRF_MASK_LENGTH);
+
+            $this->_csrfToken = str_replace('+', '/', base64_encode($mask . $this->xorTokens($token, $mask)));
+        }
+        return $this->_csrfToken;
+    }
+
+    protected function loadCsrfToken()
+    {
+        if ($this->enableCsrfCookie) {
+            return $this->getCookies()->getValue($this->csrfParam);
+        } else {
+            return Yii::$app->getSession()->get($this->csrfParam);
+        }
+    }
+
+    protected function generateCsrfToken()
+    {
+        $token = Yii::$app->getSecurity()->generateRandomString();
+        if ($this->enableCsrfCookie) {
+            $cookie = $this->createCsrfCookie($token);
+            Yii::$app->getResponse()->getCookies()->add($cookie);
+        } else {
+            Yii::$app->getSession()->set($this->csrfParam, $token);
+        }
+        return $token;
+    }
+
+    private function xorTokens($token1, $token2)
+    {
+        $n1 = StringHelper::byteLength($token1);
+        $n2 = StringHelper::byteLength($token2);
+        if ($n1 > $n2) {
+            $token2 = str_pad($token2, $n1, $token2);
+        } elseif ($n1 < $n2) {
+            $token1 = str_pad($token1, $n2, $n1 === 0 ? ' ' : $token1);
+        }
+
+        return $token1 ^ $token2;
+    }
+
+    public function getCsrfTokenFromHeader()
+    {
+        $key = 'HTTP_' . str_replace('-', '_', strtoupper(static::CSRF_HEADER));
+        return isset($_SERVER[$key]) ? $_SERVER[$key] : null;
+    }
+
+    protected function createCsrfCookie($token)
+    {
+        $options = $this->csrfCookie;
+        $options['name'] = $this->csrfParam;
+        $options['value'] = $token;
+        return new Cookie($options);
+    }
+
+    public function validateCsrfToke($token = null)
+    {
+        $method = $this->getMethod();
+        if (!$this->enableCsrfValidateion || in_array($method, ['GET', 'HEAD', 'OPTIONS'], true)) {
+            return true;
+        }
+
+        $trueToken = $this->loadCsrfToken();
+
+        if ($token !== null) {
+            return $this->validateCsrfTokenInternal($token, $trueToken);
+        } else {
+            return $this->validateCsrfTokenInternal($this->getBodyParam($this->csrfParam), $trueToken)
+                || $this->validateCsrfTokenInternal($this->getCsrfTokenFromHeader(), $trueToken);
+        }
+    }
+
+    private function validateCsrfTokenInternal($token, $trueToken)
+    {
+        if (!is_string($token)) {
+            return false;
+        }
+
+        $token = base64_encode(str_replace('.', '+', $token));
+        $n = StringHelper::byteLength($token);
+        if ($n <= static::CSRF_MASK_LENGTH) {
+            return false;
+        }
+        $mask = StringHellper::byteSubstr($token, 0, static::CSRF_MASK_LENGTH);
+        $token = StringHelper::byteSubstr($token, static::CSRF_MASK_LENGTH, $n - static::CSRF_MASK_LENGTH);
+        $token = $this->xorTokens($mask, $token);
+        return $token === $trueToken;
     }
 }
