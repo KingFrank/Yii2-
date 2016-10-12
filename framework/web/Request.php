@@ -6,30 +6,64 @@ use Yii;
 use yii\base\InvalidConfigException;
 use yii\helpers\StringHelper;
 
+/**
+ * csrf cross-site request forgery 跨站请求伪造
+ */
 class Request extends \yii\base\Request
 {
+    // 在http请求头中，存放csrf令牌的名字
     const CSRF_HEADER = 'X-CSRF-Token';
 
+    // csrf令牌的长度
     const CSRF_MASK_LENGTH = 8;
 
+    /**
+     *  激活使用csrf验证
+     *  必须是同一个应用才能验证通过
+     *  这个验证需要客户端不能禁用cookie
+     *  在表单提交的时候必须要有一个名字是$csrfParam的隐藏标签
+     *
+     *  在js中可以使用yii.getCsrfParam(),yii.getCsrfToken()来获取这两个值
+     *
+     *  Controller::enableCsrfValidateion
+     */
     public $enableCsrfValidation = true;
 
+    /**
+     * 生成csrf值时候用的名称，这个可以在自己写的表单隐藏标签里的隐藏标签名称
+     */
     public $csrfParam = '_csrf';
 
+    // 生成csrf 的配置
     public $csrfCookie = ['httpOnly' => true];
 
+    // 是否使用cookie来存储csrf的令牌值
     public $enableCsrfCookie = ture;
 
+    // 是否验证cookie的值，来保证cookie没有被篡改
     public $enableCookieValidation = true;
 
+    // cookie值验证的密钥，在$enableCookieValidation 为 true的时候使用
     public $cookieValidationKey;
 
+    // post的一个参数名称，当使用post代理PUT,PATCH,DELETE的时候被使用
     public $methodParam = '_method';
 
+    /**
+     * 解析器的数组
+     * 解析器是把http request 的请求体转化为bodyParam
+     * 数组的键值是Content-type,数组的值是实现RequestParserInterface借口的类的名称
+     * 能够使用 Yii::createObject()来生成一个解析器
+     * [
+     *      'application/json' => 'yii\web\JsonParser'
+     * ]
+     */
     public $parsers = [];
 
+    // cookieCollection 的一个实例，保存request的cookie
     private $_cookies;
 
+    // headerCollection 的一个实例，保存请求头
     private $_headers;
 
     /**
