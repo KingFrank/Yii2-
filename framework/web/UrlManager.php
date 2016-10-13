@@ -6,6 +6,12 @@ use yii\base\Component;
 use yii\base\InvalidConfigException;
 use yii\Caching\Cache;
 
+/**
+ * 一个URL的管理器
+ * 控制路由使用的规则urlRule
+ * 控制生成url路径和绝对的路径
+ * 依赖的是Request
+ */
 class UrlManager extends Component
 {
     // 使用美化的模式
@@ -40,6 +46,10 @@ class UrlManager extends Component
 
     private $_ruleCache;
 
+    /**
+     * 初始化管理器
+     * 将规则实例化存储到cache中
+     */
     public function init()
     {
         parent::init();
@@ -68,6 +78,7 @@ class UrlManager extends Component
 
     /**
      * 添加匹配的规则
+     * 根据$append 来判断存储的次序
      */
     public function addRules($rules, $append = true)
     {
@@ -82,6 +93,9 @@ class UrlManager extends Component
         }
     }
 
+    /**
+     * 实例化规则
+     */
     protected function bulidRules($rules)
     {
         $compileRules = [];
@@ -229,6 +243,9 @@ class UrlManager extends Component
         }
     }
 
+    /**
+     * 通过缓存的路由解析来获取URL
+     */
     protected function getUrlFromCache($cacheKey, $route, $params)
     {
         if (!empty($this->_ruleCache[$cacheKey])) {
