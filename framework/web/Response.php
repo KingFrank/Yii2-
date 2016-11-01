@@ -9,14 +9,20 @@ use yii\helpers\Url;
 use yii\helpers\FileHelper;
 use yii\helpers\StringHelper;
 
+/**
+ * 服务器给请求的回应
+ * 
+ */
 class Response extends \yii\base\Response
 {
+    // response回复是要进行的事务
     const EVENT_BEFORE_SEND = 'beforeSend';
 
     const EVENT_AFTER_SEND = 'afterSend';
 
     const EVENT_AFTER_PREPARE = 'afterPrepare';
 
+    // response 回复时设置解析的类型
     const FORMAT_RAW = 'raw';
 
     const FORMAT_HTML = 'html';
@@ -49,6 +55,7 @@ class Response extends \yii\base\Response
 
     public $isSent = false;
 
+    // 设置返回的状态=>短语
     public static $httpStatuses = [
         100 => 'Continue',
         101 => 'Switching Protocols',
@@ -119,6 +126,7 @@ class Response extends \yii\base\Response
 
     private $_statusCode = 200;
 
+    // header的实例
     private $_headers;
 
     public function init()
@@ -168,6 +176,10 @@ class Response extends \yii\base\Response
         return $this->_headers;
     }
 
+    /*
+     * 这个是发送回复时进行的所有的事务
+     * 必须要按顺序来进行
+     */
     public function send()
     {
         if ($this->isSent) {
@@ -264,6 +276,10 @@ class Response extends \yii\base\Response
         }
     }
             
+    /**
+     * 打开并读取文件
+     * 调用 sendStreamAsFile来发送文件
+     */
     public function sendFile($filePath, $attachmentName = null, $options = [])
     {
         if (isset($options['mineType'])) {
@@ -278,6 +294,9 @@ class Response extends \yii\base\Response
         return $this;
     }
 
+    /**
+     * 把指定的内容输出成浏览器到文件
+     */
     public function sendContentAsFile($content, $attachmentName, $options = [])
     {
         $headers = $this->getHeaders();
@@ -306,6 +325,9 @@ class Response extends \yii\base\Response
         return $this;
     }
 
+    /**
+     * 将流输出到浏览器，下载到文档里
+     */
     public function sendStreamAsFile($handle, $attachmentName, $options = [])
     {
         $headers = $this->getHeaders();
@@ -338,6 +360,12 @@ class Response extends \yii\base\Response
         return $this;
     }
 
+    /**
+     * 基础的下载文件
+     * no-cache 是要先验证然后考虑是否下载最新的文档，一般是使用ETags来验证
+     * no-store是表示从服务器获取一个完整的相应，不适用缓存
+     * 是其余的几个下载的基础
+     */
     public function setDownloadHeaders($attachmentName, $mineType = null, $inline = false, $contentLength = null)
     {
         $headers = $this->getHeaders();
@@ -359,6 +387,11 @@ class Response extends \yii\base\Response
         return $this;
     }
 
+    /**
+     * 当文件过大，或者是要多线程现在一些文件的时候可以把一个实体分割
+     * 使用http1.1的range/content-range来确定一次请求获取的实体的范围
+     * 包括了开始位置和结束位置
+     */
     protected function getHttpRange($fileSize)
     {
         if (!isset($SERVER['HTTP_RANGE']) || $_SERVER['HTTP_RANGE'] === '-') {
@@ -414,6 +447,9 @@ class Response extends \yii\base\Response
         return false;
     }
 
+    /**
+     * 重定向
+     */
     public function redirect($url, $statusCode = 302, $checkAjax = true)
     {
         if (is_array($url) && isset($url[0])) {
@@ -523,6 +559,10 @@ class Response extends \yii\base\Response
         ];
     }
 
+    /**
+     * 发送前的准备工作
+     * 主要是为了识别格式
+     */
     protected function prepare()
     {
         if ($this->stream !== null) {
