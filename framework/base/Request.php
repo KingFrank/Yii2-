@@ -6,10 +6,15 @@ use Yii;
 abstract class Request extends Component
 {
 
+    /**
+     * 入口文件
+     */
     private $_scriptFile;
 
+    // 是否是consolse的请求
     private $_isConsoleRequest;
 
+    // 解析请求的路由
     abstract public function resolve();
 
     public function getIsConsoleRequest()
@@ -17,11 +22,17 @@ abstract class Request extends Component
         return $this->_isConsoleRequest !== null ? $this->_isConsoleRequest : PHP_SAPI === 'cli';
     }
 
+    /**
+     * 判断是否是监听请求
+     */
     public function setIsConsoleRequest($value)
     {
         $this->_isConsoleRequest = $value;
     }
 
+    /*
+     * 获取入口文件
+     */
     public function getScriptFile()
     {
         if ($this->_scriptFile === null) {
@@ -35,6 +46,9 @@ abstract class Request extends Component
         return $this->_scriptFile;
     }
 
+    /**
+     * 设置入口文件
+     */
     public function setScriptFile($value)
     {
         $scriptFile = realpath(Yii::getAlias($value));
